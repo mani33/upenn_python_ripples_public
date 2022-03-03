@@ -328,43 +328,25 @@ def collect_mouse_group_rip_data(data_sessions, beh_state, xmin, xmax,
         idx += 1
     return group_data
         
-def average_rip_rate_across_mice (data_sessions, pulse_per_train, beh_state, xmin, xmax, bin_width):
+def select_one_elec_per_mouse(group_data, elec_sel_meth):
     """
-    Average ripple rate data across mice.
+    When multiple electrodes had ripples, pick one based on given selection method.
     Inputs:
-        data_sessions : list of dict, typically an output of function calls from data_sessions module
-        pulse_per_train: pulese per train
-        beh_state: behavior state to collect ripples from: 'all','rem','nrem','awake'       
-        xmin: a negative number in sec
-        xmax: a positive number in sec
-        bin_width: in millisec    
-        
+        group_data : list (mice) of list(channels) of dict (ripple data), this is an output from
+                     collect_mouse_group_rip_data(...) function call.       
+        elec_sel_meth: str, should be one of 'random','max_effect', 'highest_baseline_rip_rate'
+                      When more than one electrode had ripples, tells you which electrode to pick.
     Outputs: 
+        t - 1D numpy array of time in sec.
         mean_rr - 1D numpy array, mean ripple rate(Hz)
         std_rr - 1D numpy array, standard deviation of each time bin
-    MS 2022-02-04
-    
-    """
-    mqtk = 0.8 # motion_quantile_tokeep
-    
-    for idx, dd in enumerate(data_sessions):
-        key = dju.get_key_from_session_ts(dd['sess'])
-        rdata, args, pulse_width, tr_on, tr_off = get_processed_rip_data (key, pulse_per_train, 
-                                                                          dd['std'], dd['minwidth'], 
-                                                                          beh_state = beh_state, 
-                                                                          motion_quantile_tokeep = mqtk, xmin = xmin, 
-                                                                          xmax = xmax, bin_width = bin_width)        
-    
-        rr, _, bin_cen = get_ripple_rate(rdata, bin_width, xmin, xmax)
-        if idx==0: # Initialize arrays
-            rip_rate = np.zeros((rr.size, len(data_sessions)))
-        rip_rate[idx,:] = rr
+    MS 2022-03-02
         
-    # Average across mice
-    mean_rr = np.mean(rip_rate, axis = 0)
-    std_rr = np.std(rip_rate, axis = 0)
+    """
     
-    return mean_rr, std_rr
+    
+def average_rip_rate_across_mice(group_data): 
+
       
 def get_light_pulse_train_info(key, pulse_per_train):
     
