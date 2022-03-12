@@ -3,9 +3,9 @@
 Created on Sun Feb 27 08:21:28 2022
 
 @author: Mani
-These are the usual modules that I need for analysis. So from console, just import
-everything in this by typing in the console: 
-    from mod_list import *
+These are the usual modules that I need for analysis. To bring all the libaries into the 
+console, type in:
+    from modules_used import *
     
 """
 

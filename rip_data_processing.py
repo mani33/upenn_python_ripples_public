@@ -328,25 +328,66 @@ def collect_mouse_group_rip_data(data_sessions, beh_state, xmin, xmax,
         idx += 1
     return group_data
         
-def select_one_elec_per_mouse(group_data, elec_sel_meth):
+def average_rip_rate_across_mice(group_data, elec_sel_meth, **kwargs):
     """
     When multiple electrodes had ripples, pick one based on given selection method.
     Inputs:
         group_data : list (mice) of list(channels) of dict (ripple data), this is an output from
                      collect_mouse_group_rip_data(...) function call.       
-        elec_sel_meth: str, should be one of 'random','max_effect', 'highest_baseline_rip_rate'
+        elec_sel_meth: str, should be one of 'avg','random','max_effect', 'max_baseline_rate'
                       When more than one electrode had ripples, tells you which electrode to pick.
+        kwargs:
+            'light_effect_win': 2-element list of bounds (in sec) of the light mediated effect.
     Outputs: 
-        t - 1D numpy array of time in sec.
+        bin_cen - 1D numpy array of bin-center time in sec.
         mean_rr - 1D numpy array, mean ripple rate(Hz)
         std_rr - 1D numpy array, standard deviation of each time bin
+        all_rr - 2D numpy array, nMice-by-nTimeBins of ripple rates
     MS 2022-03-02
         
     """
+    all_rr = []
+    for md in group_data: # loop over mice       
+        # For each mouse pick a channel or average across channels
+        n_chan = len(md)
+        if elec_sel_meth == 'random':
+            chd = md[np.random.randint(n_chan)]
+            args = chd['args']
+            mouse_rr, _, bin_cen = get_ripple_rate(chd['rdata'], 
+                                                   args.bin_width, 
+                                                   args.xmin, args.xmax)                
+        else: # Other methods that require computing ripple rate
+            rip_rate = []
+            for chd in md: # loop over channels of each mouse
+                args = chd['args']
+                rd, _, bin_cen = get_ripple_rate(chd['rdata'], 
+                                                       args.bin_width, 
+                                                       args.xmin, args.xmax)
+                rip_rate.append(rd)
+            # Apply selection on the ripple rate
+            rip_rate = np.array(rip_rate)
+            if elec_sel_meth == 'avg':
+                mouse_rr = np.mean(rip_rate, axis=0)
+            elif elec_sel_meth == 'max_effect':
+                # Select time window where effect is expected
+                assert 'light_effect_win' in kwargs, 'You must provide "light_effect_win" eg. [0,5]'
+                w = kwargs['light_effect_win']
+                edata = rip_rate[:, (bin_cen >= w[0]) & (bin_cen < w[1])]
+                max_ch_ind = np.mean(edata, axis=1).argmax()
+                mouse_rr = rip_rate[max_ch_ind,:]
+            elif elec_sel_meth == 'max_baseline_rate':
+                edata = rip_rate[:, bin_cen < 0]
+                max_ch_ind = np.mean(edata, axis=1).argmax()
+                mouse_rr = rip_rate[max_ch_ind, :]
+                
+        all_rr.append(mouse_rr)
+    # Average across mice
+    all_rr = np.array(all_rr)
+    mean_rr = np.mean(all_rr, axis=0)
+    std_rr = np.std(all_rr, axis=0)
     
-    
-def average_rip_rate_across_mice(group_data): 
-
+    return bin_cen, mean_rr, std_rr, all_rr
+                
       
 def get_light_pulse_train_info(key, pulse_per_train):
     
