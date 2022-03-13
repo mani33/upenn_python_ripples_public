@@ -8,9 +8,7 @@ ripple suppression.
 
 # Get database tables
 from itertools import compress
-import re
 import numpy as np
-import pandas as pd
 import acq as acq
 import cont as cont
 import ripples as ripples
