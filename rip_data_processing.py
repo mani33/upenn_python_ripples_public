@@ -305,7 +305,7 @@ def collect_mouse_group_rip_data(data_sessions, beh_state, xmin, xmax,
         group_data - list of dict, containing info of ripples for each chan of each mouse     
     """
     
-    group_data = [[]]*data_sessions.shape[0]
+    group_data = [[] for _ in range(data_sessions.shape[0])]
     idx = 0
     
     for _, dd in data_sessions.iterrows():
@@ -372,23 +372,32 @@ def average_rip_rate_across_mice(group_data, elec_sel_meth, **kwargs):
                 # Select time window where effect is expected
                 assert 'light_effect_win' in kwargs, 'You must provide "light_effect_win" eg. [0,5]'
                 w = kwargs['light_effect_win']
-                edata = rip_rate[:, (bin_cen >= w[0]) & (bin_cen < w[1])]
-                max_ch_ind = np.mean(edata, axis=1).argmax()
-                mouse_rr = rip_rate[max_ch_ind,:]
+                # First normalize ripple rate to baseline so that we can identify
+                # channel with max suppression effect
+                normfn = lambda rr: rr/np.mean(rr[bin_cen < 0])
+                rip_rate_norm = np.apply_along_axis(normfn, 1, rip_rate)                
+                edata = rip_rate_norm[:, (bin_cen >= w[0]) & (bin_cen < w[1])]
+                # Find channel with minimum ripple rate in the light effect window
+                max_supp_ch_ind = np.mean(edata, axis=1).argmin()
+                mouse_rr = rip_rate[max_supp_ch_ind,:]
             elif elec_sel_meth == 'max_baseline_rate':
                 edata = rip_rate[:, bin_cen < 0]
                 max_ch_ind = np.mean(edata, axis=1).argmax()
                 mouse_rr = rip_rate[max_ch_ind, :]
                 
         all_rr.append(mouse_rr)
+    
+    # Normalize ripple rate to baseline before averaging across mice
+    all_rr_norm = [rr/np.mean(rr[bin_cen < 0]) for rr in all_rr]
+    
     # Average across mice
-    all_rr = np.array(all_rr)
-    mean_rr = np.mean(all_rr, axis=0)
-    std_rr = np.std(all_rr, axis=0)
+    all_rr = np.array(all_rr_norm)
+    mean_rr = np.mean(all_rr_norm, axis=0)
+    std_rr = np.std(all_rr_norm, axis=0)
     
     return bin_cen, mean_rr, std_rr, all_rr
                 
-      
+ 
 def get_light_pulse_train_info(key, pulse_per_train):
     
     """
