@@ -298,29 +298,43 @@ def collect_mouse_group_rip_data(data_sessions, beh_state, xmin, xmax,
         beh_state: behavior state to collect ripples from: 'all','rem','nrem','awake'       
         xmin: a negative number in sec
         xmax: a positive number in sec
-        bin_width: in millisec   
+        bin_width: in millisec
+        kwargs: 'pool_repeats', boolean to indicate if data from repeats of a mouse session 
+                should be combined or not. Default is pool_repeats=True.
+       
     Outputs:
         group_data - list of dict, containing info of ripples for each chan of each mouse     
     """
     
     group_data = [[] for _ in range(data_sessions.shape[0])]
     idx = 0
-    
-    for _, dd in data_sessions.iterrows():
-        key = dju.get_key_from_session_ts(dd['session_ts'])[0]
+    """
+    To combine repeated sessions from mouse subjects, we will group their row
+    indices and iterate through this index groups
+    """
+    ids = np.array(data_sessions.animal_id)
+    uids = np.unique(ids)
+    for m_id in uids:
+        # Get data slice corresponding to the current mouse
+        dd = data_sessions[ids==m_id]        
+        keys = [dju.get_key_from_session_ts(sess_ts)[0] for sess_ts in list(dd.session_ts)]
        
         # Go through each channel of the given session
-        chans = [int(cc) for cc in dd['chan'].split(',')]
+        # It is assumed that all repeated sessions of any mouse have the same 
+        # set of experimental parameters including recording channels. 
+        # So parameters come from the first session.
+        dd_one = dd.iloc[0,:]
+        chans = [int(cc) for cc in dd_one.chan.split(',')]
         for ch in chans:
-            key.update({'chan_num': ch})
-            print(key)
-            rdata, args = get_processed_rip_data (key, dd['pulse_per_train'], 
-                                                  dd['std'], dd['minwidth'], 
+            keys = [key.update({'chan_num': ch}) for key in keys]
+            print(keys)
+            rdata, args = get_processed_rip_data (keys, dd_one.pulse_per_train, 
+                                                  dd_one.std, dd_one.minwidth, 
                                                   beh_state = beh_state, 
-                                                  motion_quantile_tokeep = dd['motion_quantile'], 
+                                                  motion_quantile_tokeep = dd_one.motion_quantile, 
                                                   xmin = xmin, xmax = xmax, 
                                                   bin_width = bin_width)             
-            tdic = {'animal_id': key['animal_id'], 'chan_num': ch,'rdata': rdata, 'args': args}
+            tdic = {'animal_id': keys[0]['animal_id'], 'chan_num': ch,'rdata': rdata, 'args': args}
             group_data[idx].append(tdic)
         print(f'Done with mouse {idx}')
         idx += 1
@@ -336,6 +350,7 @@ def average_rip_rate_across_mice(group_data, elec_sel_meth, **kwargs):
                       When more than one electrode had ripples, tells you which electrode to pick.
         kwargs:
             'light_effect_win': 2-element list of bounds (in sec) of the light mediated effect.
+
     Outputs: 
         bin_cen - 1D numpy array of bin-center time in sec.
         mean_rr - 1D numpy array, mean ripple rate(Hz)
