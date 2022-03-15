@@ -326,12 +326,14 @@ def collect_mouse_group_rip_data(data_sessions, beh_state, xmin, xmax,
         dd_one = dd.iloc[0,:]
         chans = [int(cc) for cc in dd_one.chan.split(',')]
         for ch in chans:
-            keys = [key.update({'chan_num': ch}) for key in keys]
+            for jk, key in enumerate(keys):
+                keys[jk].update({'chan_num': ch})
+            # keys = [key.update() for key in keys]
             print(keys)
-            rdata, args = get_processed_rip_data (keys, dd_one.pulse_per_train, 
-                                                  dd_one.std, dd_one.minwidth, 
+            rdata, args = get_processed_rip_data (keys, dd_one['pulse_per_train'], 
+                                                  dd_one['std'], dd_one['minwidth'], 
                                                   beh_state = beh_state, 
-                                                  motion_quantile_tokeep = dd_one.motion_quantile, 
+                                                  motion_quantile_tokeep = dd_one['motion_quantile'], 
                                                   xmin = xmin, xmax = xmax, 
                                                   bin_width = bin_width)             
             tdic = {'animal_id': keys[0]['animal_id'], 'chan_num': ch,'rdata': rdata, 'args': args}
@@ -409,6 +411,50 @@ def average_rip_rate_across_mice(group_data, elec_sel_meth, **kwargs):
     std_rr = np.std(all_rr_norm, axis=0)
     
     return bin_cen, mean_rr, std_rr, all_rr
+
+def average_head_disp_across_mice(group_data, **kwargs):
+    """
+    When multiple electrodes had ripples, pick one based on given selection method.
+    Inputs:
+        group_data : list (mice) of list(channels) of dict (ripple data), this is an output from
+                     collect_mouse_group_rip_data(...) function call.   
+    Outputs: 
+        bin_cen - 1D numpy array of bin-center time in sec.
+        mean_rr - 1D numpy array, mean head disp 
+        std_rr - 1D numpy array, standard deviation of each time bin
+        all_rr - 2D numpy array, nMice-by-nTimeBins of head disp
+    MS 2022-03-14
+        
+    """
+    all_rr = []
+    for md in group_data: # loop over mice       
+        # For each mouse pick head disp data
+        print(len(md))
+        print(md[0]['rdata'].keys())
+        crd = md[0]['rdata']
+        
+        n = len(crd)
+        t_list = []
+        v_list = []
+        for jj in range(n):
+            t_list.append(crd[jj]['rel_mt'])
+            v_list.append(crd[jj]['head_disp'])
+        
+                
+        t_vec, mi_list = gfun.interp_based_event_trig_data_average(t_list, v_list)
+        
+        # Average: first change into 2D array where rows are trials
+        mi_array = np.stack(mi_list, axis=0)
+        mi_avg = np.mean(mi_array, axis=0)
+        all_rr.append(mi_avg)
+    
+    
+    # Average across mice
+    all_rr = np.array(all_rr)
+    mean_rr = np.mean(all_rr, axis=0)
+    std_rr = np.std(all_rr, axis=0)
+    
+    return t_vec, mean_rr, std_rr, all_rr
                 
  
 def get_light_pulse_train_info(key, pulse_per_train):
