@@ -412,14 +412,16 @@ def average_rip_rate_across_mice(group_data, elec_sel_meth, **kwargs):
     
     return bin_cen, mean_rr, std_rr, all_rr
 
-def average_head_disp_across_mice(group_data, **kwargs):
+def pool_head_disp_across_mice(group_data, within_mouse_operator, **kwargs):
     """
-    When multiple electrodes had ripples, pick one based on given selection method.
+    Pool head displacement across mice. We will not normalize within each mouse
     Inputs:
         group_data : list (mice) of list(channels) of dict (ripple data), this is an output from
-                     collect_mouse_group_rip_data(...) function call.   
+                     collect_mouse_group_rip_data(...) function call. 
+        within_mouse_operator: str, should be 'mean' or 'median' - tells you if mean
+                              or median is computed across trials within a mouse    
     Outputs: 
-        bin_cen - 1D numpy array of bin-center time in sec.
+        t_vec - 1D numpy array of time(sec) relative to stimulus onset
         mean_rr - 1D numpy array, mean head disp 
         std_rr - 1D numpy array, standard deviation of each time bin
         all_rr - 2D numpy array, nMice-by-nTimeBins of head disp
@@ -428,9 +430,7 @@ def average_head_disp_across_mice(group_data, **kwargs):
     """
     all_rr = []
     for md in group_data: # loop over mice       
-        # For each mouse pick head disp data
-        print(len(md))
-        print(md[0]['rdata'].keys())
+        # For each mouse pick head disp data     
         crd = md[0]['rdata']
         
         n = len(crd)
@@ -440,15 +440,22 @@ def average_head_disp_across_mice(group_data, **kwargs):
             t_list.append(crd[jj]['rel_mt'])
             v_list.append(crd[jj]['head_disp'])
         
-                
+        # Here we compute a common time vector for all stimulation trials. Also,
+        # motion corresponding to the bin centers are computed using interpolation
         t_vec, mi_list = gfun.interp_based_event_trig_data_average(t_list, v_list)
         
-        # Average: first change into 2D array where rows are trials
+        # Pool data within mouse: 
+        # first change into 2D array where rows are trials
         mi_array = np.stack(mi_list, axis=0)
-        mi_avg = np.mean(mi_array, axis=0)
-        all_rr.append(mi_avg)
-    
-    
+        if within_mouse_operator == 'mean':
+            mi_cen = np.mean(mi_array, axis=0)
+        elif within_mouse_operator == 'median':
+            mi_cen = np.median(mi_array, axis=0)
+        else:
+            raise ValueError('within_mouse_operator should be "mean" or "median"')
+            
+        all_rr.append(mi_cen)
+        
     # Average across mice
     all_rr = np.array(all_rr)
     mean_rr = np.mean(all_rr, axis=0)
